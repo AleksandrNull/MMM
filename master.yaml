@@ -1,0 +1,36 @@
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: master
+  namespace: minions
+spec:
+  replicas: 1
+  selector:
+    k8s-app: master
+    ersion: v0
+  template:
+    metadata:
+      labels:
+        k8s-app: master
+        ersion: v0
+    spec:
+      containers:
+      - name: master
+        image: 127.0.0.1:31500/qa/master:latest
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: master
+  namespace: minions
+  labels:
+    k8s-app: master
+spec:
+  selector:
+    k8s-app: master
+  ports:
+  - name: master
+    port: 8888
+    protocol: TCP
+

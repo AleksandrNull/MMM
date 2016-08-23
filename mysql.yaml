@@ -1,0 +1,37 @@
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: mysql
+  namespace: minions
+
+spec:
+  replicas: 1
+  selector:
+    k8s-app: mysql
+    version: v0
+  template:
+    metadata:
+      labels:
+        k8s-app: mysql
+        version: v0
+    spec:
+      containers:
+      - name: mysql
+        image: 127.0.0.1:31500/qa/mariadb:latest
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: minions
+  labels:
+    k8s-app: mysql
+spec:
+  selector:
+    k8s-app: mysql
+  ports:
+  - name: mysql
+    port: 3306
+    protocol: TCP
+

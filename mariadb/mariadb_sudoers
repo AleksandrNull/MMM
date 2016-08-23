@@ -1,0 +1,1 @@
+%mysql ALL=(root) NOPASSWD: /bin/chown mysql\: /var/lib/mysql, /bin/chown mysql\:mysql /var/log/mysql, /opt/bin/mariadb-security-reset.expect
