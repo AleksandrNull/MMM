@@ -5,7 +5,7 @@ metadata:
   namespace: minions
 
 spec:
-  replicas: 1000
+  replicas: 3
   selector:
     k8s-app: minion
     version: v0
@@ -18,4 +18,7 @@ spec:
       containers:
       - name: minion
         image: 127.0.0.1:31500/qa/minion:latest
+        env:
+        - name: MINION_RC_NUMBER
+          value: "1"
 

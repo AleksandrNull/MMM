@@ -1,5 +1,6 @@
 from flask import Flask
 from flask import request,make_response
+import base64
 import MySQLdb
 import multiprocessing
 import time
@@ -17,15 +18,18 @@ def prepare():
   trydb(db,"CREATE DATABASE `master` DEFAULT CHARSET=utf8")
   db = MySQLdb.connect("mysql", "root", "swordfish","master")
   trydb(db,"CREATE TABLE `minions` ( \
-                  `id` bigint(20) NOT NULL, \
+                  `id` bigint(20) NOT NULL AUTO_INCREMENT, \
                   `minion_id` varchar(60) NOT NULL, \
-                  `last_seen` bigint(20) DEFAULT NULL, \
-                  `minion_time` bigint(20) DEFAULT NULL)")
+                  `last_seen` bigint(20) NOT NULL, \
+                  `minion_time` bigint(20) NOT NULL, \
+                  `minion_env` json DEFAULT NULL, \
+                  PRIMARY KEY (id))")
   trydb(db,"CREATE TABLE `tasks` ( \
-                  `id` int(11) NOT NULL, \
+                  `id` int(11) NOT NULL AUTO_INCREMENT, \
                   `task` mediumtext NOT NULL, \
                   `minion_id` varchar(60) NOT NULL, \
-                  `token` varchar(60) NOT NULL)")
+                  `token` varchar(60) NOT NULL, \
+                  PRIMARY KEY (id))")
   trydb(db,"CREATE USER master IDENTIFIED BY 'master'")
   trydb(db,"GRANT USAGE ON *.* TO 'master'@'*'")
   trydb(db,"GRANT ALL PRIVILEGES ON `master`.* TO 'master'@'%' WITH GRANT OPTION")
@@ -55,12 +59,13 @@ class DBWorker(multiprocessing.Process):
         return
 
 class Task(object):
-    def __init__(self, minion_id,minion_time,last_seen):
+    def __init__(self, minion_id,minion_time,last_seen,minion_env):
         self.minion_id = minion_id
         self.minion_time = minion_time
         self.last_seen = last_seen
+        self.minion_env = minion_env
     def __call__(self):
-        return "INSERT into minions (minion_id,minion_time,last_seen) values ('%s','%s','%s')" % (self.minion_id,self.minion_time,self.last_seen)
+        return "INSERT into minions (minion_id,minion_time,last_seen,minion_env) values ('%s','%s','%s','%s')" % (self.minion_id,self.minion_time,self.last_seen,self.minion_env)
 
 prepare()
 
@@ -82,8 +87,9 @@ app = Flask(__name__)
 def register():
     minion_id = request.args.get('minion_id')
     minion_time = request.args.get('minion_time')
+    minion_env = base64.b64decode(request.args.get('env'))
     if (minion_id):
-      tasks.put(Task(minion_id, minion_time, int(time.time()*1000000000)))
+      tasks.put(Task(minion_id, minion_time, int(time.time()*1000000000),minion_env))
       resp = make_response('Minion queued.')
       resp.headers['Content-Type'] = "text/html"    
     else:
@@ -97,7 +103,11 @@ def stats():
     cursor = db.cursor()
     cursor.execute("SELECT count(*) FROM minions")
     minions = cursor.fetchone()[0]
-    cursor.execute("SELECT (max(last_seen) - min(last_seen)) as value FROM `minions`")
+    start = request.args.get('start')
+    if (start):   
+      cursor.execute("SELECT (max(last_seen) - %s) as value FROM `minions`" % start)
+    else:
+      cursor.execute("SELECT (max(last_seen) - min(last_seen)) as value FROM `minions`")
     time_diff = cursor.fetchone()[0]
     if (time_diff):
       time=time_diff/1000000000
