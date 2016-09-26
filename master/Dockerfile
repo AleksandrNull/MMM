@@ -7,5 +7,5 @@ RUN pip install flask flask-Mysql
 RUN mkdir -p /opt/master
 ADD app.py /opt/master/app.py
 ADD prepare_db.py /opt/master/prepare_db.py
-
+ADD templates /opt/master/templates
 ENTRYPOINT python /opt/master/app.py 

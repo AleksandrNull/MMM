@@ -1,9 +1,27 @@
 from flask import Flask
-from flask import request,make_response
+from flask import make_response,render_template,request
 import base64
+import json
 import MySQLdb
 import multiprocessing
 import time
+
+def db_trans(data):
+  d={}
+  u=[]
+  c={}
+  for v,k in data:
+    if k not in d:
+      d[k]=[]
+    if k not in c:
+      c[k]=0
+    c[k]+=1
+    d[k].append([c[k],v])
+  for z in d:
+    b={}
+    b["key"]=z; b["values"]=[c for c in d[z]]
+    u.append(b)
+  return u
 
 def trydb(db,query):
   try:
@@ -22,7 +40,7 @@ def prepare():
                   `minion_id` varchar(60) NOT NULL, \
                   `last_seen` bigint(20) NOT NULL, \
                   `minion_time` bigint(20) NOT NULL, \
-                  `minion_env` json DEFAULT NULL, \
+                  `minion_env` blob, \
                   PRIMARY KEY (id))")
   trydb(db,"CREATE TABLE `tasks` ( \
                   `id` int(11) NOT NULL AUTO_INCREMENT, \
@@ -63,9 +81,9 @@ class Task(object):
         self.minion_id = minion_id
         self.minion_time = minion_time
         self.last_seen = last_seen
-        self.minion_env = minion_env
+        self.minion_env = base64.b64decode(minion_env)
     def __call__(self):
-        return "INSERT into minions (minion_id,minion_time,last_seen,minion_env) values ('%s','%s','%s','%s')" % (self.minion_id,self.minion_time,self.last_seen,self.minion_env)
+        return "INSERT into minions (minion_id,minion_time,last_seen,minion_env) values ('%s','%s','%s',COLUMN_CREATE(%s))" % (self.minion_id,self.minion_time,self.last_seen,self.minion_env)
 
 prepare()
 
@@ -87,7 +105,7 @@ app = Flask(__name__)
 def register():
     minion_id = request.args.get('minion_id')
     minion_time = request.args.get('minion_time')
-    minion_env = base64.b64decode(request.args.get('env'))
+    minion_env = request.args.get('env')
     if (minion_id):
       tasks.put(Task(minion_id, minion_time, int(time.time()*1000000000),minion_env))
       resp = make_response('Minion queued.')
@@ -103,7 +121,10 @@ def stats():
     cursor = db.cursor()
     cursor.execute("SELECT count(*) FROM minions")
     minions = cursor.fetchone()[0]
+    ident_var = request.args.get('MINION_RC')
     start = request.args.get('start')
+    cursor.execute("SELECT min(last_seen) as min,max(last_seen) as max FROM `minions`")
+    time_min,time_max=cursor.fetchone()
     if (start):   
       cursor.execute("SELECT (max(last_seen) - %s) as value FROM `minions`" % start)
     else:
@@ -113,9 +134,15 @@ def stats():
       time=time_diff/1000000000
     else:
       time=0
-    resp = make_response('Registered number of minions: %s \n Overall time: %s seconds'% (minions,time))
-    resp.headers['Content-Type'] = "text/html"    
-    return resp
+    if (ident_var):
+      cursor.execute("SELECT last_seen,COLUMN_GET(minion_env, '%s' as CHAR) as minion_env from minions ORDER BY last_seen ASC;" % ident_var)
+    else:
+      cursor.execute("SELECT last_seen, 1 as minion_env from minions ORDER BY last_seen ASC;")
+    data=db_trans(cursor.fetchall())
+    #resp = make_response('Registered number of minions: %s \n Overall time: %s seconds'% (minions,time))
+    #resp.headers['Content-Type'] = "text/html"    
+    return render_template('stats.html', minions=minions,time=time,data=data,time_min=time_min)
+    #return resp
 
 @app.route('/cleanup')
 def cleanup():
@@ -123,7 +150,7 @@ def cleanup():
     cursor = db.cursor()
     cursor.execute("DELETE FROM minions")
     db.commit()
-    resp = make_response("All minions was deleted")
+    resp = make_response("<meta http-equiv=\"refresh\" content=\"3;url=/stats\" />\nAll minions was deleted")
     resp.headers['Content-Type'] = "text/html"           
     return resp
 

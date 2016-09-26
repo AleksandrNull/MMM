@@ -19,6 +19,6 @@ spec:
       - name: minion
         image: 127.0.0.1:31500/qa/minion:latest
         env:
-        - name: MINION_RC_NUMBER
+        - name: MINION_RC
           value: "1"
 
